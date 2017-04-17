@@ -3,6 +3,7 @@ package tesseract
 // #cgo LDFLAGS: -L /usr/local/lib -ltesseract
 // #include "tesseract/capi.h"
 // #include <stdlib.h>
+// FILE *getStdout(void) { return stdout; }
 import "C"
 
 import (
@@ -335,7 +336,7 @@ Print Tesseract parameters to the given file.
 
 // DumpVariables dumps the variables set on a Tess to stdout
 func (t *Tess) DumpVariables() {
-	C.TessBaseAPIPrintVariables(t.tba, (*C.FILE)(C.stdout))
+	C.TessBaseAPIPrintVariables(t.tba, (*C.FILE)(C.getStdout()))
 }
 
 // BOOL TessBaseAPISetVariable(TessBaseAPI* handle, const char* name, const char* value);
@@ -358,71 +359,8 @@ func (t *Tess) SetRectangle(left, top, width, height int) {
 	C.TessBaseAPISetRectangle(t.tba, C.int(left), C.int(top), C.int(width), C.int(height))
 }
 
-// int TessBaseAPIRecognize(TessBaseAPI* handle, ETEXT_DESC* monitor);
-func (t *Tess) Recognize() error {
-	ret := C.TessBaseAPIRecognize(t.tba, nil)
-	if ret != 0 {
-		return errors.New("recognition failed")
-	}
-	return nil
-}
-
-// typedef enum TessPageIteratorLevel { RIL_BLOCK, RIL_PARA, RIL_TEXTLINE, RIL_WORD, RIL_SYMBOL} TessPageIteratorLevel;
-type PageIteratorLevel int
-
-const (
-	RIL_BLOCK PageIteratorLevel = iota
-	RIL_PARA
-	RIL_TEXTLINE
-	RIL_WORD
-	RIL_SYMBOL
-)
-
-// TessResultIterator* TessBaseAPIGetIterator(TessBaseAPI* handle);
-func (t *Tess) Iterator() (*ResultIterator, error) {
-	ri := C.TessBaseAPIGetIterator(t.tba)
-
-	if ri == nil {
-		return nil, errors.New("no results")
-	}
-
-	resultIterator := &ResultIterator{
-		ri: ri,
-	}
-
-	runtime.SetFinalizer(resultIterator, (*ResultIterator).delete)
-	return resultIterator, nil
-}
-
-// typedef struct TessResultIterator TessResultIterator;
-type ResultIterator struct {
-	ri *C.TessResultIterator
-}
-
-// void TessResultIteratorDelete(TessResultIterator* handle);
-func (r *ResultIterator) delete() {
-	if r.ri != nil {
-		C.TessResultIteratorDelete(r.ri)
-	}
-}
-
-// TESS_API BOOL  TESS_CALL TessResultIteratorNext(TessResultIterator* handle, TessPageIteratorLevel level);
-func (r *ResultIterator) Next(level PageIteratorLevel) bool {
-	return gobool(C.TessResultIteratorNext(r.ri, C.TessPageIteratorLevel(level)))
-}
-
-// char* TessResultIteratorGetUTF8Text(const TessResultIterator* handle, TessPageIteratorLevel level);
-func (r *ResultIterator) Text(level PageIteratorLevel) (string, error) {
-	cText := C.TessResultIteratorGetUTF8Text(r.ri, C.TessPageIteratorLevel(level))
-	if cText == nil {
-		return "", errors.New("already at the end")
-	}
-	defer C.free(unsafe.Pointer(cText))
-	text := C.GoString(cText)
-	return text, nil
-}
-
 // typedef struct TessPageIterator TessPageIterator;
+// typedef struct TessResultIterator TessResultIterator;
 // typedef struct TessMutableIterator TessMutableIterator;
 // typedef enum TessOcrEngineMode { OEM_TESSERACT_ONLY, OEM_CUBE_ONLY, OEM_TESSERACT_CUBE_COMBINED, OEM_DEFAULT } TessOcrEngineMode;
 // typedef enum TessPageSegMode { PSM_OSD_ONLY, PSM_AUTO_OSD, PSM_AUTO_ONLY, PSM_AUTO, PSM_SINGLE_COLUMN, PSM_SINGLE_BLOCK_VERT_TEXT, PSM_SINGLE_BLOCK, PSM_SINGLE_LINE, PSM_SINGLE_WORD, PSM_CIRCLE_WORD, PSM_SINGLE_CHAR, PSM_COUNT } TessPageSegMode;
@@ -488,10 +426,12 @@ func (r *ResultIterator) Text(level PageIteratorLevel) (string, error) {
 
 // TessPageIterator* TessBaseAPIAnalyseLayout(TessBaseAPI* handle);
 
+// int TessBaseAPIRecognize(TessBaseAPI* handle, ETEXT_DESC* monitor);
 // int TessBaseAPIRecognizeForChopTest(TessBaseAPI* handle, ETEXT_DESC* monitor);
 // char* TessBaseAPIProcessPages(TessBaseAPI* handle, const char* filename, const char* retry_config, int timeout_millisec);
 // char* TessBaseAPIProcessPage(TessBaseAPI* handle, PIX* pix, int page_index, const char* filename, const char* retry_config, int timeout_millisec);
 
+// TessResultIterator* TessBaseAPIGetIterator(TessBaseAPI* handle);
 // TessMutableIterator* TessBaseAPIGetMutableIterator(TessBaseAPI* handle);
 
 // int TessBaseAPIMeanTextConf(TessBaseAPI* handle);
@@ -521,6 +461,7 @@ func (r *ResultIterator) Text(level PageIteratorLevel) (string, error) {
 // void TessPageIteratorOrientation(TessPageIterator* handle, TessOrientation *orientation, TessWritingDirection *writing_direction, TessTextlineOrder *textline_order, float *deskew_angle);
 
 // /* Result iterator */
+// void TessResultIteratorDelete(TessResultIterator* handle);
 // TessResultIterator* TessResultIteratorCopy(const TessResultIterator* handle);
 // TessPageIterator* TessResultIteratorGetPageIterator(TessResultIterator* handle);
 // const TessPageIterator* TessResultIteratorGetPageIteratorConst(const TessResultIterator* handle);
